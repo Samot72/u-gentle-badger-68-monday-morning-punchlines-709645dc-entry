@@ -52,6 +52,13 @@ function assertValid(line: string): number {
   if (/[\u0000-\u001f\u007f]/.test(line)) {
     throw new Error("joke must not contain control characters");
   }
+  // No invisible formatting characters: zero-width spaces, zero-width
+  // joiners/non-joiners, BOMs and word joiners are invisible on screen
+  // yet count toward the character gate, so a line carrying them would
+  // be judged longer than it looks.
+  if (/[\u200b-\u200f\u202a-\u202e\u2060\ufeff]/.test(line)) {
+    throw new Error("joke must not contain invisible formatting characters");
+  }
   return count;
 }
 
@@ -75,6 +82,14 @@ function assertDeterministic(line: string): void {
     }
     if (bytesA.toString("utf8") !== line) {
       throw new Error("determinism check failed: bytes do not match the joke");
+    }
+    // The byte length must equal the UTF-8 encoding of the line exactly:
+    // a hidden encoding change (BOM, replacement character) would keep
+    // the decoded text equal while shifting the bytes on disk.
+    if (bytesA.length !== Buffer.byteLength(line, "utf8")) {
+      throw new Error(
+        `determinism check failed: byte length ${bytesA.length} != UTF-8 length ${Buffer.byteLength(line, "utf8")}`,
+      );
     }
   } finally {
     rmSync(first, { recursive: true, force: true });
